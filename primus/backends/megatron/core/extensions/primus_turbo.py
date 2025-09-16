@@ -738,6 +738,7 @@ class PrimusTurboDeepepManager(_DeepepManager):
             num_recv_tokens = torch.sum(self.tokens_per_expert)
             if num_recv_tokens.device.type != "cpu":
                 self.cuda_dtoh_stream.wait_stream(torch.cuda.current_stream())
+                num_recv_tokens.record_stream(self.cuda_dtoh_stream)
                 with self.cuda_dtoh_stream:
                     self.num_recv_tokens = torch.empty_like(
                         num_recv_tokens, dtype=num_recv_tokens.dtype, device="cpu", pin_memory=True
