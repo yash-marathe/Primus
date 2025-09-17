@@ -36,7 +36,8 @@ from primus.backends.megatron.core.fusions.fused_indices_converter import (
     fused_indices_to_multihot,
 )
 
-from .deepep import fused_dispatch, fused_combine
+# from .deepep import fused_dispatch, fused_combine
+from primus.backends.megatron.core.transformer.moe.fused_a2a import fused_dispatch, fused_combine, set_deepep_num_sms
 
 
 class PrimusTurboAttention(te.pytorch.DotProductAttention):
@@ -645,6 +646,7 @@ class PrimusTurboDeepepManager(_DeepepManager):
         self.token_indices: Optional[torch.Tensor] = None
         self.token_probs: Optional[torch.Tensor] = None
         # Handle used for combine operation
+        
         self.handle = None
 
         if backend_type not in self._supported_backend_type:
@@ -699,7 +701,10 @@ class PrimusTurboDeepepManager(_DeepepManager):
             mask = self.token_probs == 0
             self.token_indices = self.token_indices.masked_fill(mask, -1)
 
-    def dispatch(self, hidden_states: torch.Tensor, async_finish: bool = False, allocate_on_comm_stream: bool = False) -> torch.Tensor:
+    def dispatch(self, 
+                 hidden_states: torch.Tensor, 
+                 async_finish: bool = False, 
+                 allocate_on_comm_stream: bool = False) -> torch.Tensor:
         # DeepEP only supports float32 probs
         if self.token_probs.dtype != torch.float32:
             if self.token_probs.dtype in [torch.bfloat16, torch.float16]:
@@ -712,13 +717,10 @@ class PrimusTurboDeepepManager(_DeepepManager):
                 self.token_probs,
                 self.num_experts,
                 self.group,
-                use_cuda_num_token_per_expert=self.use_cuda_num_token_per_expert,
-                num_use_cus=self.deep_num_cus,
-                # num_worst_tokens=self.num_worst_tokens,
-                # config=self.dispatch_config,
-                backend_type=self.backend_type,
                 async_finish=async_finish,
                 allocate_on_comm_stream=allocate_on_comm_stream,
+                use_cuda_num_token_per_expert=self.use_cuda_num_token_per_expert,
+                num_worst_tokens=self.num_worst_tokens,
             )
         )
 
@@ -757,9 +759,6 @@ class PrimusTurboDeepepManager(_DeepepManager):
             hidden_states,
             self.group,
             self.handle,
-            num_use_cus=self.deep_num_cus,
-            # config=self.combine_config,
-            backend_type=self.backend_type,
             async_finish=async_finish,
             allocate_on_comm_stream=allocate_on_comm_stream,
         )
@@ -851,6 +850,9 @@ class PrimusTurboFlexTokenDispatcher(MoEFlexTokenDispatcher):
         assert (
             self.config.moe_pad_expert_input_to_capacity is False
         ), "PrimusTurbo token dispatcher does not support --moe-pad-expert-input-to-capacity"
+        
+        set_deepep_num_sms(self.turbo_deepep_num_cus)
+        
         self._comm_manager = PrimusTurboDeepepManager(
             group=self.tp_ep_group,
             router_topk=self.tp_size * self.config.moe_router_topk,
@@ -860,8 +862,9 @@ class PrimusTurboFlexTokenDispatcher(MoEFlexTokenDispatcher):
             num_local_experts=self.num_local_experts,
             router_dtype=self.config.moe_router_dtype,
             backend_type=self.turbo_deepep_backend,
-            deep_num_cus=self.turbo_deepep_num_cus,
-            use_cuda_num_token_per_expert=self.use_turbo_grouped_mlp,
+            # use_cuda_num_token_per_expert=self.use_turbo_grouped_mlp,
+            # NOTE: if return cuda token_per_expert, turbo groupgemm will cause cpu sync
+            use_cuda_num_token_per_expert=False,
             sync_free_moe=self.turbo_sync_free_moe,
             num_worst_tokens=self.turbo_deepep_num_worst_tokens,
             dispatch_tuned_config=self.turbo_deepep_dispatch_tuned_config,
