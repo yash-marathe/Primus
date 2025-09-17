@@ -36,6 +36,8 @@ from primus.backends.megatron.core.fusions.fused_indices_converter import (
     fused_indices_to_multihot,
 )
 
+from .deepep import fused_dispatch, fused_combine
+
 
 class PrimusTurboAttention(te.pytorch.DotProductAttention):
     """
@@ -697,14 +699,14 @@ class PrimusTurboDeepepManager(_DeepepManager):
             mask = self.token_probs == 0
             self.token_indices = self.token_indices.masked_fill(mask, -1)
 
-    def dispatch(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def dispatch(self, hidden_states: torch.Tensor, async_finish: bool = False, allocate_on_comm_stream: bool = False) -> torch.Tensor:
         # DeepEP only supports float32 probs
         if self.token_probs.dtype != torch.float32:
             if self.token_probs.dtype in [torch.bfloat16, torch.float16]:
                 print("DeepEP only supports float32 probs, please set --moe-router-dtype=fp32")
             self.token_probs = self.token_probs.float()  # downcast or upcast
         hidden_states, dispatched_indices, dispatched_probs, num_tokens_per_expert, handle = (
-            pt.ops.fused_dispatch(
+            fused_dispatch(
                 hidden_states,
                 self.token_indices,
                 self.token_probs,
@@ -712,9 +714,11 @@ class PrimusTurboDeepepManager(_DeepepManager):
                 self.group,
                 use_cuda_num_token_per_expert=self.use_cuda_num_token_per_expert,
                 num_use_cus=self.deep_num_cus,
-                num_worst_tokens=self.num_worst_tokens,
-                config=self.dispatch_config,
+                # num_worst_tokens=self.num_worst_tokens,
+                # config=self.dispatch_config,
                 backend_type=self.backend_type,
+                async_finish=async_finish,
+                allocate_on_comm_stream=allocate_on_comm_stream,
             )
         )
 
@@ -748,14 +752,16 @@ class PrimusTurboDeepepManager(_DeepepManager):
                 self.num_recv_tokens = num_recv_tokens
         return hidden_states
 
-    def combine(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states, event = pt.ops.fused_combine(
+    def combine(self, hidden_states: torch.Tensor, async_finish: bool = False, allocate_on_comm_stream: bool = False) -> torch.Tensor:
+        hidden_states, event = fused_combine(
             hidden_states,
             self.group,
             self.handle,
             num_use_cus=self.deep_num_cus,
-            config=self.combine_config,
+            # config=self.combine_config,
             backend_type=self.backend_type,
+            async_finish=async_finish,
+            allocate_on_comm_stream=allocate_on_comm_stream,
         )
         # Release the handle after combine operation
         self.handle = None

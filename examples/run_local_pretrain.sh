@@ -40,8 +40,9 @@ EXP=${EXP:-"examples/megatron/exp_pretrain.yaml"}
 
 # Default docker image
 # DOCKER_IMAGE=${DOCKER_IMAGE:-"docker.io/rocm/megatron-lm:v25.5_py310"}
-DOCKER_IMAGE=${DOCKER_IMAGE:-"rocm/megatron-lm-training-private:v25.5_py310_20250904"}
-docker pull $DOCKER_IMAGE
+# DOCKER_IMAGE=${DOCKER_IMAGE:-"docker.io/rocm/megatron-lm-training-private:v25.5_py310_20250904"}
+# DOCKER_IMAGE=${DOCKER_IMAGE:-"docker.io/yuankaichenamd/megatron_rocm_private:25.5.2"}a
+DOCKER_IMAGE=${DOCKER_IMAGE:-"docker.io/yuankaichenamd/megatron_rocm_private:25.5.2"}
 # Project root
 PRIMUS_PATH=$(realpath "$(dirname "$0")/..")
 

@@ -207,10 +207,10 @@ export NVTE_USE_OPTIMIZED_HIPIFIED_CAST_TRANSPOSE=0
 # pip install "${PRIMUS_PATH}"/third_party/transformer_engine-1.13.0+d4d1e81c-cp310-cp310-linux_x86_64.whl
 
 # # install primus_turbo
-# pip uninstall primus_turbo -y
-# pip install -qq hip-python --extra-index-url https://test.pypi.org/simple
-# pip install -qq "${PRIMUS_PATH}"/third_party/primus_turbo-0.0.0+e10f106-cp310-cp310-linux_x86_64.whl
-# pip install triton==3.3.0
+pip uninstall primus_turbo -y
+pip install -qq hip-python --extra-index-url https://test.pypi.org/simple
+pip install -qq "${PRIMUS_PATH}"/third_party/primus_turbo-0.0.0+cb6475a-cp310-cp310-linux_x86_64.whl
+pip install triton==3.3.0
 
 # # install apex
 # pip uninstall apex -y

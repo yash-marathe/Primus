@@ -1,4 +1,4 @@
-export NCCL_IB_HCA=mlx5_0,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_7,mlx5_8,mlx5_9
+# export NCCL_IB_HCA=mlx5_0,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_7,mlx5_8,mlx5_9
 export CPUS_PER_TASK=96
 export HSA_NO_SCRATCH_RECLAIM=1 # change to 0
 export NVTE_CK_USES_BWD_V3=1 # change to 0
@@ -13,7 +13,7 @@ ALL_NODES=(uswocpm2m-059-003)
 ALL_NNODES=200
 
 # the real number of nodes to run
-export NNODES=96
+export NNODES=2
 
 # SELECTED_NODES=("${ALL_NODES[@]:8:$NNODES}")
 # export NODELIST=$(IFS=, ; echo "${SELECTED_NODES[*]}")
@@ -24,13 +24,13 @@ MBS=1
 TP=1
 ETP=1
 
-GBS=768
-PP=24
+GBS=32
+PP=2
 EP=8
 CP=1
 VPP=4
 OPTIMIZER=adam
-RECOMPUTE_LAYERS=96
+RECOMPUTE_LAYERS=0
 RECOMPUTE_ID_START=0
 BALANCE=True
 
@@ -72,7 +72,7 @@ bash ./examples/run_slurm_pretrain.sh --micro_batch_size $MBS \
                                       --recompute_num_layers $RECOMPUTE_LAYERS \
                                       --moe_use_legacy_grouped_gemm True \
                                       --use_turbo_token_dispatcher_fp8_alltoall null \
-                                      --dump_pp_data True \
+                                      --dump_pp_data False \
                                       --moe_router_num_groups 1 \
                                       --moe_router_group_topk 1 \
                                       ${VPP_CONFIG} \
@@ -84,7 +84,7 @@ bash ./examples/run_slurm_pretrain.sh --micro_batch_size $MBS \
                                       --profile_step_start 5 \
                                       --profile_step_end 6 \
                                       --export-config $EXPORT_CONFIG \
-                                      --num_layers 96 \
+                                      --num_layers 8 \
                                       --train_iters 10 2>&1 | tee $LOG_FILE
 
                                     #   --recompute_layer_ids_start $RECOMPUTE_ID_START \
