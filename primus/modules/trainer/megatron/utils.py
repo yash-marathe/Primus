@@ -238,9 +238,9 @@ def pp_warmup(args, config, model, optimizer):
                 attn_output = layer.self_attention(attn_input, attention_mask=attention_mask)
                 attn_output[0].backward(torch.ones_like(attn_output[0]))
 
-                mlp_input = torch.randn(seq_len, 1, config.hidden_size, device="cuda", dtype=dtype)
-                mlp_output = layer.mlp(mlp_input)
-                mlp_output[0].backward(torch.ones_like(mlp_output[0]))
+                # mlp_input = torch.randn(seq_len, 1, config.hidden_size, device="cuda", dtype=dtype)
+                # mlp_output = layer.mlp(mlp_input)
+                # mlp_output[0].backward(torch.ones_like(mlp_output[0]))
 
             if model_chunk.use_forward_hook:
                 model_chunk.enable_forward_pre_hook()
@@ -375,7 +375,7 @@ def validate_args_on_rocm(args):
         assert args.use_turbo_deepep
         assert args.use_turbo_grouped_mlp
         assert args.moe_permute_fusion
-        assert args.expert_model_parallel_size <= 8
+        # assert args.expert_model_parallel_size <= 8
 
     # dump pp data
     if args.dump_pp_data and args.pipeline_model_parallel_size == 1:

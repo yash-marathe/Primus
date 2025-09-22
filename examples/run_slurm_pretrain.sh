@@ -28,7 +28,7 @@ EOF
 exit 0
 fi
 
-export MASTER_PORT=${MASTER_PORT:-12345}
+export MASTER_PORT=${MASTER_PORT:-32145}
 export NNODES=${NNODES:-1}
 
 SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
@@ -44,12 +44,13 @@ export NODELIST=${NODELIST:-""}
 
 #--nodelist=pdfc-aig-[000003-000006],pdfc-aig-[000010-000019],pdfc-aig-00001N,pdfc-aig-00001O \
 # 
+
 srun -N "${NNODES}" \
      --exclusive \
      --ntasks-per-node=1 \
      -t 04:30:00 \
-     --reservation=gpu-40_gpu-41_gpu-43_gpu-44_gpu-46_gpu-47_gpu-50_gpu-55_reservation \
      --cpus-per-task="${CPUS_PER_TASK:-256}" \
+     --nodelist="${NODELIST}" \
      bash -c "
           readarray -t node_array < <(scontrol show hostnames \"\$SLURM_JOB_NODELIST\")
           if [ \"\$SLURM_NODEID\" = \"0\" ]; then
