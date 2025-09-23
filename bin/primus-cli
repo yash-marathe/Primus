@@ -20,7 +20,6 @@ Description:
 
 Supported modes:
     slurm      Launch distributed workflows via Slurm cluster (srun/sbatch)
-    k8s-safe   Launch workflows in a Kubernetes-safe mode
     container  Launch workflows in a managed Docker/Podman container
     direct     Launch workflows directly on the current host or container
 
@@ -89,9 +88,6 @@ mode="$1"; shift
 case "$mode" in
     slurm)
         run_subscript "primus-cli-slurm.sh" "$@"
-        ;;
-    k8s-safe)
-        run_subscript "primus-cli-k8ssafe.sh" "$@"
         ;;
     container)
         run_subscript "primus-cli-container.sh" "$@"
