@@ -69,19 +69,23 @@ if [ $# -lt 2 ]; then
     usage
 fi
 
+API_URL=""
+CMD=""
+WORKLOAD_ID=""
 
-# Initialize ENV_JSON as an empty JSON object
-ENV_JSON="{}"
+REPLICA=1
+CPU="96"
+GPU="8"
+EXP_PATH=""
+DATA_PATH=""
+BACKEND="megatron"
+IMAGE="docker.io/rocm/megatron-lm:v25.8_py310"
+HF_TOKEN="${HF_TOKEN:-}"
+WORKSPACE="primus-safe-pretrain"
+NODELIST=""
+
+
 EXTRA_ARGS=()
-
-
-# Helper function to add key-value pairs to ENV_JSON using jq
-add_to_env_json() {
-    local key="$1"
-    local val="$2"
-    ENV_JSON=$(echo "$ENV_JSON" | jq --arg k "$key" --arg v "$val" '. + {($k): $v}')
-}
-
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -141,16 +145,9 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         --*)
-            key="${1#--}"  # remove leading '--'
-            val="$2"
-            if [[ "$val" =~ ^--.* || -z "$val" ]]; then
-                echo "Skipping option '$key' due to missing or invalid value"
-                shift
-                continue
-            fi
-            EXTRA_ARGS+=("--$key" "$val")
-            echo "[primus-cli-k8s-safe] passthrough: --$key $val"
-            shift 2
+            shift
+            EXTRA_ARGS+=("$@")
+            break
             ;;
         *)
             echo "[primus-cli-k8s-safe][ERROR] Unknown param: $1"
@@ -169,9 +166,9 @@ if [[ "$CMD" == "create" && -z "$EXP_PATH" ]]; then
     exit 1
 fi
 
-USER_NAME=$(whoami)
-CUR_DIR=$(pwd)
 
+# Initialize ENV_JSON as an empty JSON object
+ENV_JSON="{}"
 
 # pass hf_token to container
 if [ -n "$HF_TOKEN" ]; then
@@ -201,7 +198,7 @@ if [[ -n "$NODELIST" ]]; then
     done
 fi
 
-
+CUR_DIR=$(pwd)
 ENTRY_POINT="cd $CUR_DIR && mkdir -p output && NNODES=\$PET_NNODES NODE_RANK=\$PET_NODE_RANK \
     primus-cli-entrypoint.sh ${EXTRA_ARGS[*]} 2>&1 | tee -a output/\$WORKLOAD_ID.k8s-job.log"
 
@@ -232,6 +229,8 @@ read -r -d '' INLINE_JSON <<EOF || true
 }
 EOF
 
+
+USER_NAME=$(whoami)
 
 # ----- API helpers -----
 curl_post() {
