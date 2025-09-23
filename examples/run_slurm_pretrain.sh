@@ -51,6 +51,30 @@ if [[ -n "${TIME:-}" ]]; then
     SLURM_ARGS+=(--time="$TIME")
 fi
 
+
+ENV_ARGS=()
+for var in \
+    HSA_NO_SCRATCH_RECLAIM \
+    NVTE_CK_USES_BWD_V3 \
+    NCCL_IB_HCA \
+    NCCL_PXN_DISABLE \
+    NCCL_P2P_NET_CHUNKSIZE \
+    GPU_MAX_HW_QUEUES \
+    GLOO_SOCKET_IFNAME \
+    NCCL_SOCKET_IFNAME \
+    REBUILD_BNXT \
+    MEGATRON_PATH \
+    TORCHTITAN_PATH \
+    BACKEND_PATH \
+    PATH_TO_BNXT_TAR_PACKAGE
+do
+    if [[ -n "${!var:-}" ]]; then
+        ENV_ARGS+=("--env" "${var}=${!var}")
+    fi
+done
+
+
 bash "${PRIMUS_PATH}"/bin/primus-cli slurm srun "${SLURM_ARGS[@]}" \
                 -- container --mount "$DATA_PATH" \
+                -- "${ENV_ARGS[@]}" \
                 -- train pretrain --config "$EXP" --data_path "$DATA_PATH" "$@"
