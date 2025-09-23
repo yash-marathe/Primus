@@ -43,6 +43,7 @@ setup(
     scripts=[
         "bin/primus-cli",
         "bin/primus-cli-slurm.sh",
+        "bin/primus-cli-k8ssafe.sh",
         "bin/primus-cli-container.sh",
         "bin/primus-cli-entrypoint.sh",
         "bin/primus-env.sh",
