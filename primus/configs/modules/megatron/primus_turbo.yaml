@@ -20,3 +20,5 @@ turbo_deepep_use_comm_stream: false
 
 # sync-free moe
 turbo_sync_free_moe_stage: 0
+# use turbo fused activation_with_probs to optmize redundant computation
+use_turbo_fused_act_with_probs: false
