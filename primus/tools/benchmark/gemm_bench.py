@@ -6,6 +6,7 @@
 
 import argparse
 import math
+from datetime import datetime
 
 import torch
 
@@ -107,6 +108,37 @@ def profile_gemm(m, n, k, dtype, trans_a, trans_b, duration_s=10.0):
     }
 
 
+def build_gemm_base_preamble(args) -> str:
+    lines = [
+        "# Base GEMM Benchmark Report",
+        "",
+        f"- Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- Cluster: amd-aig-poolside",
+        f"- Benchmark Duration: {args.duration} sec",
+        "",
+        "## GEMM Configuration",
+        f"- M: {args.M}",
+        f"- N: {args.N}",
+        f"- K: {args.K}",
+        f"- Transpose A: {args.trans_a}",
+        f"- Transpose B: {args.trans_b}",
+        f"- Dtype: {args.dtype}",
+        "",
+        "## GEMM Shape",
+        f"- A: ({args.M}, {args.K})" if not args.trans_a else f"- Aᵗ: ({args.K}, {args.M})",
+        f"- B: ({args.K}, {args.N})" if not args.trans_b else f"- Bᵗ: ({args.N}, {args.K})",
+        f"- C: ({args.M}, {args.N})",
+        "",
+        "## Metrics",
+        "- `avg_time_ms`: average time per matmul (ms)",
+        "- `tflops`: total TFLOPS (1e12 ops/sec)",
+        "- `bandwidth_gbps`: estimated memory bandwidth usage (GB/s)",
+        "- `arith_intensity`: arithmetic intensity (FLOPs per byte)",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def run_gemm_benchmark(args):
     if args.M <= 0 or args.N <= 0 or args.K <= 0:
         raise ValueError("M, N, K must be positive integers.")
@@ -138,12 +170,6 @@ def run_gemm_benchmark(args):
             "host",
             "world",
             "rank",
-            "m",
-            "n",
-            "k",
-            "trans_a",
-            "trans_b",
-            "dtype",
             "avg_time_ms",
             "tflop",
             "tflops",
@@ -169,11 +195,13 @@ def run_gemm_benchmark(args):
                 row.append(v)
             rows_ll.append(row)
 
+        preamble = build_gemm_base_preamble(args)
         write_table_simple(
             header=header,
             rows=rows_ll,
             output_file=getattr(args, "output_file", None),
             append=getattr(args, "append", False),
+            preamble=preamble if not getattr(args, "append", False) else None,
         )
 
         print(f"[✔] GEMM benchmark finished. Results saved to {args.output_file}")
