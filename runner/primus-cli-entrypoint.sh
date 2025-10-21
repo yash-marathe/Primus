@@ -143,8 +143,6 @@ for kv in "${primus_env_kv[@]}"; do
 done
 
 
-pip install -qq -r requirements.txt
-
 # Build launch arguments.
 if [[ "$run_mode" == "single" ]]; then
     CMD="python3 $script_path $*"
