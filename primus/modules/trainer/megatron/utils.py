@@ -257,8 +257,16 @@ def schedule_wrapper(func):
             "memory": None,
             "fwd_start": [],
             "fwd_end": [],
+            "fwd_minibatch": [],
+            "fwd_chunk": [],
             "bwd_start": [],
             "bwd_end": [],
+            "bwd_minibatch": [],
+            "bwd_chunk": [],
+            "wgrad_start": [],
+            "wgrad_end": [],
+            "wgrad_minibatch": [],
+            "wgrad_chunk": [],
         }
 
         _GLOBAL_PP_VIS_EVENTS_PER_ITER["start"] = torch.cuda.Event(enable_timing=True)
@@ -277,7 +285,7 @@ def schedule_wrapper(func):
     return wrapper
 
 
-def fwd_bwd_wrapper(func, mode):
+def fwd_bwd_wrapper(func, mode, minibatch=None, chunk=None):
     def wrapper(*args, **kwargs):
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
@@ -289,6 +297,11 @@ def fwd_bwd_wrapper(func, mode):
         global _GLOBAL_PP_VIS_EVENTS_PER_ITER
         _GLOBAL_PP_VIS_EVENTS_PER_ITER[mode + "_start"].append(start)
         _GLOBAL_PP_VIS_EVENTS_PER_ITER[mode + "_end"].append(end)
+
+        if minibatch is not None:
+            _GLOBAL_PP_VIS_EVENTS_PER_ITER[mode + "_minibatch"].append(minibatch)
+        if chunk is not None:
+            _GLOBAL_PP_VIS_EVENTS_PER_ITER[mode + "_chunk"].append(chunk)
         return res
 
     return wrapper
@@ -299,13 +312,6 @@ def set_dump_pp_data_patch():
 
     schedules.forward_step = fwd_bwd_wrapper(schedules.forward_step, "fwd")
     schedules.backward_step = fwd_bwd_wrapper(schedules.backward_step, "bwd")
-
-    schedules.forward_backward_pipelining_without_interleaving = schedule_wrapper(
-        schedules.forward_backward_pipelining_without_interleaving
-    )
-    schedules.forward_backward_pipelining_with_interleaving = schedule_wrapper(
-        schedules.forward_backward_pipelining_with_interleaving
-    )
 
 
 def dump_pp_data(args, num_mbs, pp_data_dir):
@@ -319,15 +325,38 @@ def dump_pp_data(args, num_mbs, pp_data_dir):
             "memory": None,
             "fwd_start": [],
             "fwd_end": [],
+            "fwd_minibatch": [],
+            "fwd_chunk": [],
             "bwd_start": [],
             "bwd_end": [],
+            "bwd_minibatch": [],
+            "bwd_chunk": [],
+            "wgrad_start": [],
+            "wgrad_end": [],
+            "wgrad_minibatch": [],
+            "wgrad_chunk": [],
         }
         iter_data["total"] = iter_events["start"].elapsed_time(iter_events["end"])
         iter_data["memory"] = iter_events["memory"]
+
         for i in range(len(iter_events["fwd_start"])):
-            for key in ["fwd_start", "fwd_end", "bwd_start", "bwd_end"]:
+            for key in ["fwd_start", "fwd_end", "bwd_start", "bwd_end", "wgrad_start", "wgrad_end"]:
+                if i >= len(iter_events[key]):
+                    continue
                 event_time = iter_events["start"].elapsed_time(iter_events[key][i])
                 iter_data[key].append(event_time)
+            for key in [
+                "fwd_minibatch",
+                "fwd_chunk",
+                "bwd_minibatch",
+                "bwd_chunk",
+                "wgrad_minibatch",
+                "wgrad_chunk",
+            ]:
+                if i >= len(iter_events[key]):
+                    continue
+                iter_data[key].append(iter_events[key][i])
+
         all_iter_data[iter_idx + 1] = iter_data
 
     rank = torch.distributed.get_rank()
@@ -337,7 +366,7 @@ def dump_pp_data(args, num_mbs, pp_data_dir):
     if dp_rank == 0:
         log_path = os.path.join(pp_data_dir, f"pp_rank_{pp_rank}.json")
         with open(log_path, "w") as f:
-            json.dump(all_iter_data, f)
+            json.dump(all_iter_data, f, indent=2)
 
     if rank == 0:
         vp_size = args.virtual_pipeline_model_parallel_size
@@ -354,7 +383,31 @@ def dump_pp_data(args, num_mbs, pp_data_dir):
         }
         log_path = os.path.join(pp_data_dir, f"config.json")
         with open(log_path, "w") as f:
-            json.dump(config_dict, f)
+            json.dump(config_dict, f, indent=2)
+
+
+def _get_sync_free_moe_options(stage: int) -> dict:
+    if stage > 3 or stage < 0:
+        raise ValueError("turbo_sync_free_moe_stage only support [0-3]")
+
+    sync_free_moe = {
+        1: {"moe_use_fused_router_with_aux_score": True, "moe_permute_fusion": True},
+        2: {
+            "moe_use_fused_router_with_aux_score": True,
+            "use_turbo_deepep": True,
+            "moe_permute_fusion": True,
+            "use_turbo_grouped_mlp": True,
+        },
+        3: {
+            "moe_use_fused_router_with_aux_score": True,
+            "use_turbo_deepep": True,
+            "moe_permute_fusion": True,
+            "use_turbo_grouped_mlp": True,
+            "use_turbo_fused_act_with_probs": True,
+        },
+    }
+
+    return sync_free_moe[stage]
 
 
 def validate_args_on_rocm(args):
@@ -362,7 +415,44 @@ def validate_args_on_rocm(args):
     if args.deterministic_mode:
         assert not args.moe_grouped_gemm, "MoE Grouped GEMM can't be used in deterministic mode."
 
+    # Turbo FP8 linear check
+    if args.fp8 and args.use_turbo_parallel_linear:
+        support_fp8_recipe = ["tensorwise", "blockwise"]
+        assert (
+            args.fp8_recipe in support_fp8_recipe
+        ), f"{args.fp8_recipe} recipe is not support when enable `use_turbo_parallel_linear`."
+
     # dump pp data
     if args.dump_pp_data and args.pipeline_model_parallel_size == 1:
         args.dump_pp_data = False
         print_rank_last(f"Disable args.dump_pp_data since args.pipeline_model_parallel_size=1")
+
+    # sync-free MoE
+    if args.turbo_sync_free_moe_stage > 0:
+        assert args.enable_primus_turbo, "Please set `enable_primus_turbo=True` to enable sync-free MoE."
+        assert (
+            args.turbo_sync_free_moe_stage > 1 and args.moe_use_legacy_grouped_gemm
+        ), "Sync-Free MoE require PrimusTurboGroupedMLP, please set `moe_use_legacy_grouped_gemm=True`"
+
+        options = _get_sync_free_moe_options(args.turbo_sync_free_moe_stage)
+        print_rank_last(
+            f"========== Enable Sync-Free MoE Stage {args.turbo_sync_free_moe_stage} (Auto-Enabled Options) =========="
+        )
+        for flag, value in options.items():
+            dots = "." * (73 - len(flag) - len(str(value)))
+            print_rank_last(f"{flag}{dots}{value}")
+            setattr(args, flag, value)
+        print_rank_last(
+            f"========== Enable Sync-Free MoE Stage {args.turbo_sync_free_moe_stage} (Auto-Enabled Options) =========="
+        )
+
+    # turbo deepep
+    if args.use_turbo_deepep:
+        assert (
+            not args.moe_shared_expert_overlap
+        ), "DeepEP not support moe_shared_expert_overlap, please set `moe_shared_expert_overlap=False`."
+        assert (
+            args.moe_router_dtype == "fp32"
+        ), "DeepEP only supports float32 probs, please set `moe_router_dtype=fp32`"
+        if args.expert_model_parallel_size >= 16:
+            assert args.turbo_deepep_num_cu <= 32, "Set `turbo_deepep_num_cu<=32` when using ep_size >= 16."
