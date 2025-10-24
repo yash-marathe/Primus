@@ -70,7 +70,9 @@ srun -N "${NNODES}" \
           export BACKEND_PATH=\${BACKEND_PATH}
           export PATH_TO_BNXT_TAR_PACKAGE=\${PATH_TO_BNXT_TAR_PACKAGE}
           export RCCL_HOME_DIR=\${RCCL_HOME_DIR}
+          export MPI_HOME_DIR=\${MPI_HOME_DIR}
           export ANP_HOME_DIR=\${ANP_HOME_DIR}
+          export AINIC_LIB=\${AINIC_LIB}
           export USING_AINIC=\${USING_AINIC}
           export USE_ROCM_AITER_ROPE_BACKEND=\${USE_ROCM_AITER_ROPE_BACKEND}
           export PRIMUS_TEAM=\${PRIMUS_TEAM}

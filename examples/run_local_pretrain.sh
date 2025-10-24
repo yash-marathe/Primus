@@ -72,8 +72,8 @@ ENV_ARGS=()
 while IFS='=' read -r name _; do
     ENV_ARGS+=("--env" "$name")
 done < <(env | grep "^PRIMUS_")
-ENV_ARGS+=("--env" "EXP")
-ENV_ARGS+=("--env" "HF_TOKEN")
+ENV_ARGS+=("--env" "EXP=$EXP")
+ENV_ARGS+=("--env" "HF_TOKEN=$HF_TOKEN")
 
 HOSTNAME=$(hostname)
 ARGS=("$@")
@@ -93,9 +93,11 @@ if [ "$USING_AINIC" == "1" ]; then
         -v "$DATA_PATH":"$DATA_PATH"
         -v "$RCCL_HOME_DIR":"$RCCL_HOME_DIR"
         -v "$ANP_HOME_DIR":"$ANP_HOME_DIR"
+        -v "$MPI_HOME_DIR":"$MPI_HOME_DIR"
+        -v "$AINIC_LIB":"$AINIC_LIB"
+        -v $PRIMUS_BUILD_DIR/:$PRIMUS_BUILD_DIR/
         -v /etc/libibverbs.d/:/etc/libibverbs.d
         -v /usr/lib/x86_64-linux-gnu/:/usr/lib/x86_64-linux-gnu/
-        -v $PRIMUS_BUILD_DIR/:$PRIMUS_BUILD_DIR/
     )
 else
     VOLUME_ARGS+=(
@@ -109,10 +111,16 @@ export CLEAN_DOCKER_CONTAINER=${CLEAN_DOCKER_CONTAINER:-0}
 
 # ------------------ Optional Container Cleanup ------------------
 docker_podman_proxy() {
-    if command -v podman &>/dev/null; then
-        podman "$@"
-    elif command -v docker &>/dev/null; then
-        docker "$@"
+    # if command -v podman &>/dev/null; then
+    #     podman "$@"
+    # elif command -v docker &>/dev/null; then
+    #     docker "$@"
+    # else
+    #     echo "Neither Docker nor Podman found!" >&2
+    #     return 1
+    # fi
+    if command -v docker &>/dev/null; then
+        sudo docker "$@"
     else
         echo "Neither Docker nor Podman found!" >&2
         return 1
@@ -134,31 +142,32 @@ fi
 
 # ------------------ Launch Training Container ------------------
 docker_podman_proxy run --rm \
-    --env MASTER_ADDR \
-    --env MASTER_PORT \
-    --env NNODES \
-    --env NODE_RANK \
-    --env GPUS_PER_NODE \
-    --env DATA_PATH \
-    --env TRAIN_LOG \
-    --env HSA_NO_SCRATCH_RECLAIM \
-    --env NVTE_CK_USES_BWD_V3 \
-    --env NCCL_IB_HCA \
-    --env GPU_MAX_HW_QUEUES \
-    --env GLOO_SOCKET_IFNAME \
-    --env NCCL_SOCKET_IFNAME \
-    --env USING_AINIC \
+    --env MASTER_ADDR=$MASTER_ADDR \
+    --env MASTER_PORT=$MASTER_PORT \
+    --env NNODES=$NNODES \
+    --env NODE_RANK=$NODE_RANK \
+    --env GPUS_PER_NODE=$GPUS_PER_NODE \
+    --env DATA_PATH=$DATA_PATH \
+    --env TRAIN_LOG=$TRAIN_LOG \
+    --env HSA_NO_SCRATCH_RECLAIM=$HSA_NO_SCRATCH_RECLAIM \
+    --env NVTE_CK_USES_BWD_V3=$NVTE_CK_USES_BWD_V3 \
+    --env NCCL_IB_HCA=$NCCL_IB_HCA \
+    --env GPU_MAX_HW_QUEUES=$GPU_MAX_HW_QUEUES \
+    --env GLOO_SOCKET_IFNAME=$GLOO_SOCKET_IFNAME \
+    --env NCCL_SOCKET_IFNAME=$NCCL_SOCKET_IFNAME \
+    --env USING_AINIC=$USING_AINIC \
     --env RCCL_HOME_DIR="$RCCL_HOME_DIR" \
     --env ANP_HOME_DIR="$ANP_HOME_DIR" \
+    --env MPI_HOME_DIR="$MPI_HOME_DIR" \
     --env AINIC_LIB="$AINIC_LIB" \
     --env PRIMUS_BUILD_DIR="$PRIMUS_BUILD_DIR" \
-    --env REBUILD_BNXT \
-    --env REBUILD_PRIMUS_TURBO \
-    --env PATH_TO_BNXT_TAR_PACKAGE \
-    --env MEGATRON_PATH \
-    --env TORCHTITAN_PATH \
-    --env BACKEND_PATH \
-    --env HF_TOKEN \
+    --env REBUILD_BNXT=$REBUILD_BNXT \
+    --env REBUILD_PRIMUS_TURBO=$REBUILD_PRIMUS_TURBO \
+    --env PATH_TO_BNXT_TAR_PACKAGE=$PATH_TO_BNXT_TAR_PACKAGE \
+    --env MEGATRON_PATH=$MEGATRON_PATH \
+    --env TORCHTITAN_PATH=$TORCHTITAN_PATH \
+    --env BACKEND_PATH=$BACKEND_PATH \
+    --env HF_TOKEN=$HF_TOKEN \
     --env USE_ROCM_AITER_ROPE_BACKEND \
     --env PRIMUS_TEAM \
     --env PRIMUS_USER \
