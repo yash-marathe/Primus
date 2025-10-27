@@ -135,7 +135,7 @@ mkdir -p "$(dirname "$log_file")"
 # Source the environment setup script (centralizes all exports and helper functions).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/primus-env.sh"
+source "${SCRIPT_DIR}/helper/primus-env.sh"
 
 for kv in "${primus_env_kv[@]}"; do
     export "${kv%%=*}"="${kv#*=}"
