@@ -79,6 +79,7 @@ run_mode="torchrun"
 script_path="primus/cli/main.py"
 primus_env_kv=()
 primus_args=()
+patch_scripts=()
 log_file=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -99,6 +100,14 @@ while [[ $# -gt 0 ]]; do
                 echo "[primus-entry][ERROR] --env requires KEY=VALUE"
                 exit 2
             fi
+            ;;
+        --patch)
+            patch_scripts+=("$2")
+            shift 2
+            ;;
+        --patch=*)
+            patch_scripts+=("${1#*=}")
+            shift
             ;;
         --log_file)
             log_file="$2"
@@ -135,13 +144,31 @@ mkdir -p "$(dirname "$log_file")"
 # Source the environment setup script (centralizes all exports and helper functions).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/helper/primus-env.sh"
+source "${SCRIPT_DIR}/helpers/primus-env.sh"
 
 for kv in "${primus_env_kv[@]}"; do
     export "${kv%%=*}"="${kv#*=}"
     LOG_INFO_RANK0 "[Primus Entrypoint] Exported env: ${kv%%=*}=${kv#*=}"
 done
 
+# Run patch scripts if specified
+if [[ ${#patch_scripts[@]} -gt 0 ]]; then
+    LOG_INFO_RANK0 "[Primus Entrypoint] Detected patch scripts: ${patch_scripts[*]}"
+    for patch in "${patch_scripts[@]}"; do
+        if [[ ! -f "$patch" ]]; then
+            LOG_WARN "[Primus Entrypoint] Patch script not found: $patch (skipping)"
+            continue
+        fi
+
+        LOG_INFO_RANK0 "[Primus Entrypoint] Running patch: bash $patch"
+        if ! bash "$patch"; then
+            LOG_ERROR "[Primus Entrypoint] Patch script failed: $patch"
+            exit 1
+        fi
+    done
+else
+    LOG_INFO_RANK0 "[Primus Entrypoint] No patch scripts specified."
+fi
 
 pip install -qq -r requirements.txt
 
