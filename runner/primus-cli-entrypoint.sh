@@ -141,7 +141,7 @@ fi
 mkdir -p "$(dirname "$log_file")"
 
 
-# Source the environment setup script (centralizes all exports and helper functions).
+# Step 1: Source Primus environment setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/helpers/primus-env.sh"
@@ -151,7 +151,36 @@ for kv in "${primus_env_kv[@]}"; do
     LOG_INFO_RANK0 "[Primus Entrypoint] Exported env: ${kv%%=*}=${kv#*=}"
 done
 
-# Run patch scripts if specified
+# Step 2: Auto-run hooks based on $1 $2 (e.g., train pretrain → hooks/train/pretrain/*)
+if [[ $# -ge 2 ]]; then
+    hook_group="$1"
+    hook_name="$2"
+    hook_dir="${SCRIPT_DIR}/helpers/hooks/${hook_group}/${hook_name}"
+    if [[ -d "$hook_dir" ]]; then
+        LOG_INFO_RANK0 "[Primus Entrypoint] Detected hooks directory: $hook_dir"
+        mapfile -t hook_files < <(find "$hook_dir" -maxdepth 1 -type f \( -name "*.sh" -o -name "*.py" \) | sort)
+        for hook_file in "${hook_files[@]}"; do
+            LOG_INFO_RANK0 "[Primus Entrypoint] Executing hook: $hook_file ${primus_args[*]}"
+            if [[ "$hook_file" == *.sh ]]; then
+                if ! bash "$hook_file" "${primus_args[@]}"; then
+                    LOG_ERROR "[Primus Entrypoint] Hook failed: $hook_file"
+                    exit 1
+                fi
+            elif [[ "$hook_file" == *.py ]]; then
+                if ! python3 "$hook_file" "${primus_args[@]}"; then
+                    LOG_ERROR "[Primus Entrypoint] Hook failed: $hook_file"
+                    exit 1
+                fi
+            fi
+        done
+    else
+        LOG_INFO_RANK0 "[Primus Entrypoint] No hook directory for [$hook_group/$hook_name]"
+    fi
+else
+    LOG_INFO_RANK0 "[Primus Entrypoint] No hook target detected (missing \$1 \$2)."
+fi
+
+# Step 3: Run patch scripts if specified
 if [[ ${#patch_scripts[@]} -gt 0 ]]; then
     LOG_INFO_RANK0 "[Primus Entrypoint] Detected patch scripts: ${patch_scripts[*]}"
     for patch in "${patch_scripts[@]}"; do
